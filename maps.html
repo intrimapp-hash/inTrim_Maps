@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pick Location</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.0/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.0/dist/leaflet.js"></script>
+</head>
+<body style="margin:0;">
+  <div id="map" style="width:100%; height:100vh;"></div>
+
+  <script>
+    // Initialize the map (set to a default location)
+    const map = L.map('map').setView([37.7749, -122.4194], 13); // Default to San Francisco
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    let marker; // To store the marker
+
+    // When the map is clicked, place a marker and get the address
+    map.on('click', async function(e) {
+      // Remove previous marker (if any)
+      if (marker) map.removeLayer(marker);
+
+      // Add a new marker at clicked location
+      marker = L.marker(e.latlng).addTo(map);
+
+      // Reverse geocoding using Nominatim
+      const lat = e.latlng.lat;
+      const lon = e.latlng.lng;
+      const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&accept-language=en`;
+
+      // Fetch address from Nominatim API
+      const response = await fetch(url, {headers: {'User-Agent': 'your-app-name'}}); // Replace with your app name
+      const data = await response.json();
+      const address = data.display_name || "No address found";
+
+      // Send data (lat, lng, address) back to Flutter
+      if (window.flutter_inappwebview) {
+        window.flutter_inappwebview.callHandler('onLocationSelected', {
+          lat: lat,
+          lng: lon,
+          address: address
+        });
+      }
+
+      alert(address); // Optionally show the address on the page (for testing)
+    });
+  </script>
+</body>
+</html>
