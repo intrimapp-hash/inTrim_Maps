@@ -5,82 +5,116 @@
   <title>Pick Location</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.0/dist/leaflet.css"/>
   <script src="https://unpkg.com/leaflet@1.9.0/dist/leaflet.js"></script>
+  <style>
+    body, html { margin: 0; padding: 0; height: 100%; }
+    #map { width: 100%; height: 100vh; }
+  </style>
 </head>
-<body style="margin:0;">
-  <div id="map" style="width:100%; height:100vh;"></div>
+<body>
+  <div id="map"></div>
 
   <script>
-    const map = L.map('map').setView([37.7749, -122.4194], 13); // Default location
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(map);
-
-    let marker; // To store the marker
-
-    // Function to fetch address and update marker popup
-    async function getAddress(lat, lon) {
-      const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&accept-language=en`;
-
-      const response = await fetch(url, { headers: { 'User-Agent': 'your-app-name' } });
-      const data = await response.json();
-      const address = data.display_name || "No address found";
-
-      // Update marker popup
-      if (marker) {
-        marker.bindPopup(address).openPopup();
+    // Helper to get query parameters
+    function getQueryParams() {
+      const params = {};
+      const queryString = window.location.search.substring(1);
+      const pairs = queryString.split("&");
+      for (const pair of pairs) {
+        const [key, value] = pair.split("=");
+        if (key && value) params[key] = decodeURIComponent(value);
       }
-
-      // Send data back to Flutter
-      if (window.flutter_inappwebview) {
-        window.flutter_inappwebview.callHandler('onLocationSelected', {
-          lat: lat,
-          lng: lon,
-          address: address
-        });
-      }
+      return params;
     }
 
-    // Get user's current location
-    function getCurrentLocation() {
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition((position) => {
-          const lat = position.coords.latitude;
-          const lon = position.coords.longitude;
-          map.setView([lat, lon], 13);
+    const queryParams = getQueryParams();
+    const latParam = parseFloat(queryParams.lat);
+    const lngParam = parseFloat(queryParams.lng);
+    const addressParam = queryParams.address || "";
 
-          // Add draggable marker at current location
-          if (!marker) {
-            marker = L.marker([lat, lon], { draggable: true }).addTo(map);
-            marker.on('dragend', function(e) {
-              const latLng = e.target.getLatLng();
-              getAddress(latLng.lat, latLng.lng);
-            });
-          } else {
-            marker.setLatLng([lat, lon]);
-          }
+    // Initialize map
+    let map;
+    let marker;
 
-          getAddress(lat, lon);
-        }, () => {
-          console.error("Unable to get location. Using default.");
-        });
+    async function initMap() {
+      let lat, lng;
+
+      if (!isNaN(latParam) && !isNaN(lngParam)) {
+        // Use provided lat/lng
+        lat = latParam;
+        lng = lngParam;
+      } else if (addressParam) {
+        // Geocode address to get lat/lng
+        const coords = await geocodeAddress(addressParam);
+        if (coords) {
+          lat = coords.lat;
+          lng = coords.lng;
+        } else {
+          lat = 37.7749; // fallback: San Francisco
+          lng = -122.4194;
+        }
+      } else {
+        lat = 37.7749; // default: San Francisco
+        lng = -122.4194;
       }
-    }
 
-    getCurrentLocation();
+      // Create map
+      map = L.map('map').setView([lat, lng], 13);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+      }).addTo(map);
 
-    // Click on map to place new draggable marker
-    map.on('click', function(e) {
-      if (marker) map.removeLayer(marker);
-      marker = L.marker(e.latlng, { draggable: true }).addTo(map);
+      // Add draggable marker
+      marker = L.marker([lat, lng], { draggable: true }).addTo(map);
+      const initialAddress = addressParam || await reverseGeocode(lat, lng);
+      marker.bindPopup(initialAddress).openPopup();
 
-      // Update address when dragging
-      marker.on('dragend', function(ev) {
-        const latLng = ev.target.getLatLng();
-        getAddress(latLng.lat, latLng.lng);
+      // Update address when marker is dragged
+      marker.on('dragend', async function(e) {
+        const pos = e.target.getLatLng();
+        const addr = await reverseGeocode(pos.lat, pos.lng);
+        marker.bindPopup(addr).openPopup();
+
+        // Optional: send data to Flutter via JS handler (if available)
+        if (window.flutter_inappwebview) {
+          window.flutter_inappwebview.callHandler('onLocationSelected', {
+            lat: pos.lat,
+            lng: pos.lng,
+            address: addr
+          });
+        }
       });
+    }
 
-      getAddress(e.latlng.lat, e.latlng.lng);
-    });
+    // Geocode address → lat/lng
+    async function geocodeAddress(address) {
+      try {
+        const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}`;
+        const response = await fetch(url, { headers: { 'User-Agent': 'flutter-app' } });
+        const data = await response.json();
+        if (data && data.length > 0) {
+          return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+        }
+      } catch(e) {
+        console.error(e);
+      }
+      return null;
+    }
+
+    // Reverse geocode lat/lng → address
+    async function reverseGeocode(lat, lng) {
+      try {
+        const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`;
+        const response = await fetch(url, { headers: { 'User-Agent': 'flutter-app' } });
+        const data = await response.json();
+        return data.display_name || "No address found";
+      } catch(e) {
+        console.error(e);
+        return "No address found";
+      }
+    }
+
+    // Initialize map
+    initMap();
   </script>
 </body>
 </html>
