@@ -10,56 +10,27 @@
   <div id="map" style="width:100%; height:100vh;"></div>
 
   <script>
-    // Initialize the map (will be set dynamically based on location)
-    const map = L.map('map').setView([37.7749, -122.4194], 13); // Default to San Francisco
+    const map = L.map('map').setView([37.7749, -122.4194], 13); // Default location
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
 
     let marker; // To store the marker
 
-    // Function to fetch the user's current location
-    function getCurrentLocation() {
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition((position) => {
-          const lat = position.coords.latitude;
-          const lon = position.coords.longitude;
-
-          // Set the map's view to the user's current location
-          map.setView([lat, lon], 13);
-
-          // Add a marker at the user's location
-          if (!marker) {
-            marker = L.marker([lat, lon], { draggable: true }).addTo(map);
-          } else {
-            marker.setLatLng([lat, lon]);
-          }
-
-          // Get the address of the current location
-          getAddress(lat, lon);
-        }, (error) => {
-          console.error("Error getting location: ", error);
-          // Default location if geolocation fails
-          const defaultLat = 37.7749;
-          const defaultLon = -122.4194;
-          map.setView([defaultLat, defaultLon], 13);
-          if (marker) marker.setLatLng([defaultLat, defaultLon]);
-        });
-      } else {
-        console.error("Geolocation is not supported by this browser.");
-      }
-    }
-
-    // Reverse geocoding function to get the address
+    // Function to fetch address and update marker popup
     async function getAddress(lat, lon) {
       const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}&accept-language=en`;
 
-      // Fetch address from Nominatim API
-      const response = await fetch(url, { headers: { 'User-Agent': 'your-app-name' } }); // Replace with your app name
+      const response = await fetch(url, { headers: { 'User-Agent': 'your-app-name' } });
       const data = await response.json();
       const address = data.display_name || "No address found";
 
-      // Send data (lat, lng, address) back to Flutter (via WebView)
+      // Update marker popup
+      if (marker) {
+        marker.bindPopup(address).openPopup();
+      }
+
+      // Send data back to Flutter
       if (window.flutter_inappwebview) {
         window.flutter_inappwebview.callHandler('onLocationSelected', {
           lat: lat,
@@ -67,33 +38,49 @@
           address: address
         });
       }
-
-      // Optionally show the address on the page (for testing)
-      alert(address);
     }
 
-    // Call the function to get current location when the page loads
+    // Get user's current location
+    function getCurrentLocation() {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition((position) => {
+          const lat = position.coords.latitude;
+          const lon = position.coords.longitude;
+          map.setView([lat, lon], 13);
+
+          // Add draggable marker at current location
+          if (!marker) {
+            marker = L.marker([lat, lon], { draggable: true }).addTo(map);
+            marker.on('dragend', function(e) {
+              const latLng = e.target.getLatLng();
+              getAddress(latLng.lat, latLng.lng);
+            });
+          } else {
+            marker.setLatLng([lat, lon]);
+          }
+
+          getAddress(lat, lon);
+        }, () => {
+          console.error("Unable to get location. Using default.");
+        });
+      }
+    }
+
     getCurrentLocation();
 
-    // When the user drags the marker, update the address
-    map.on('moveend', async function() {
-      const lat = marker.getLatLng().lat;
-      const lon = marker.getLatLng().lng;
-      getAddress(lat, lon);
-    });
-
-    // When the map is clicked, place a marker and get the address
-    map.on('click', async function(e) {
-      // Remove previous marker (if any)
+    // Click on map to place new draggable marker
+    map.on('click', function(e) {
       if (marker) map.removeLayer(marker);
-
-      // Add a new marker at clicked location (draggable)
       marker = L.marker(e.latlng, { draggable: true }).addTo(map);
 
-      // Get the address from Nominatim
+      // Update address when dragging
+      marker.on('dragend', function(ev) {
+        const latLng = ev.target.getLatLng();
+        getAddress(latLng.lat, latLng.lng);
+      });
+
       getAddress(e.latlng.lat, e.latlng.lng);
     });
-
   </script>
 </body>
 </html>
