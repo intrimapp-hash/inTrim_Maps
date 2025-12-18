@@ -14,6 +14,9 @@
   <div id="map"></div>
 
   <script>
+    let map;
+    let marker;
+
     // Helper to get query parameters
     function getQueryParams() {
       const params = {};
@@ -31,58 +34,17 @@
     const lngParam = parseFloat(queryParams.lng);
     const addressParam = queryParams.address || "";
 
-    // Initialize map
-    let map;
-    let marker;
-
-    async function initMap() {
-      let lat, lng;
-
-      if (!isNaN(latParam) && !isNaN(lngParam)) {
-        // Use provided lat/lng
-        lat = latParam;
-        lng = lngParam;
-      } else if (addressParam) {
-        // Geocode address to get lat/lng
-        const coords = await geocodeAddress(addressParam);
-        if (coords) {
-          lat = coords.lat;
-          lng = coords.lng;
-        } else {
-          lat = 37.7749; // fallback: San Francisco
-          lng = -122.4194;
-        }
-      } else {
-        lat = 37.7749; // default: San Francisco
-        lng = -122.4194;
+    // Reverse geocode lat/lng → address
+    async function reverseGeocode(lat, lng) {
+      try {
+        const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`;
+        const response = await fetch(url, { headers: { 'User-Agent': 'flutter-app' } });
+        const data = await response.json();
+        return data.display_name || "No address found";
+      } catch(e) {
+        console.error(e);
+        return "No address found";
       }
-
-      // Create map
-      map = L.map('map').setView([lat, lng], 13);
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors'
-      }).addTo(map);
-
-      // Add draggable marker
-      marker = L.marker([lat, lng], { draggable: true }).addTo(map);
-      const initialAddress = addressParam || await reverseGeocode(lat, lng);
-      marker.bindPopup(initialAddress).openPopup();
-
-      // Update address when marker is dragged
-      marker.on('dragend', async function(e) {
-        const pos = e.target.getLatLng();
-        const addr = await reverseGeocode(pos.lat, pos.lng);
-        marker.bindPopup(addr).openPopup();
-
-        // Optional: send data to Flutter via JS handler (if available)
-        if (window.flutter_inappwebview) {
-          window.flutter_inappwebview.callHandler('onLocationSelected', {
-            lat: pos.lat,
-            lng: pos.lng,
-            address: addr
-          });
-        }
-      });
     }
 
     // Geocode address → lat/lng
@@ -100,20 +62,75 @@
       return null;
     }
 
-    // Reverse geocode lat/lng → address
-    async function reverseGeocode(lat, lng) {
-      try {
-        const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`;
-        const response = await fetch(url, { headers: { 'User-Agent': 'flutter-app' } });
-        const data = await response.json();
-        return data.display_name || "No address found";
-      } catch(e) {
-        console.error(e);
-        return "No address found";
+    // Initialize map
+    async function initMap() {
+      let lat, lng;
+
+      if (!isNaN(latParam) && !isNaN(lngParam)) {
+        lat = latParam;
+        lng = lngParam;
+      } else if (addressParam) {
+        const coords = await geocodeAddress(addressParam);
+        if (coords) {
+          lat = coords.lat;
+          lng = coords.lng;
+        } else {
+          lat = 37.7749;
+          lng = -122.4194;
+        }
+      } else if (navigator.geolocation) {
+        // Load user location if available
+        await new Promise((resolve) => {
+          navigator.geolocation.getCurrentPosition(
+            (position) => {
+              lat = position.coords.latitude;
+              lng = position.coords.longitude;
+              resolve();
+            },
+            () => {
+              lat = 37.7749;
+              lng = -122.4194;
+              resolve();
+            }
+          );
+        });
+      } else {
+        lat = 37.7749;
+        lng = -122.4194;
       }
+
+      map = L.map('map').setView([lat, lng], 15);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+      }).addTo(map);
+
+      const initialAddress = addressParam || await reverseGeocode(lat, lng);
+      marker = L.marker([lat, lng], { draggable: true }).addTo(map);
+      marker.bindPopup(initialAddress).openPopup();
+
+      // Update marker popup and URL when dragged
+      marker.on('dragend', async function(e) {
+        const pos = e.target.getLatLng();
+        const addr = await reverseGeocode(pos.lat, pos.lng);
+        marker.bindPopup(addr).openPopup();
+
+        // Update URL without reloading
+        const newUrl = `${window.location.pathname}?lat=${pos.lat}&lng=${pos.lng}&address=${encodeURIComponent(addr)}`;
+        window.history.replaceState(null, '', newUrl);
+
+        console.log("Updated URL:", newUrl);
+
+        // Optional: send data to Flutter if JS handler exists
+        if (window.flutter_inappwebview) {
+          window.flutter_inappwebview.callHandler('onLocationSelected', {
+            lat: pos.lat,
+            lng: pos.lng,
+            address: addr
+          });
+        }
+      });
     }
 
-    // Initialize map
     initMap();
   </script>
 </body>
