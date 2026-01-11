@@ -8,36 +8,10 @@
   <style>
     body, html { margin: 0; padding: 0; height: 100%; }
     #map { width: 100%; height: 100vh; }
-    #loc-btn {
-      position: absolute;
-      top: 12px;
-      right: 12px;
-      z-index: 1000;
-      background: white;
-      padding: 8px 12px;
-      border-radius: 4px;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.3);
-      cursor: pointer;
-      font-family: sans-serif;
-    }
-    #loc-msg {
-      position: absolute;
-      top: 56px;
-      right: 12px;
-      z-index: 1000;
-      background: rgba(255,255,255,0.95);
-      padding: 8px 12px;
-      border-radius: 4px;
-      max-width: 240px;
-      font-family: sans-serif;
-      display: none;
-    }
   </style>
 </head>
 <body>
   <div id="map"></div>
-  <div id="loc-btn">Use my location</div>
-  <div id="loc-msg"></div>
 
   <script>
     let map;
@@ -88,44 +62,6 @@
       return null;
     }
 
-    // Show status messages to user
-    function showMsg(text, visible = true) {
-      const el = document.getElementById('loc-msg');
-      el.textContent = text;
-      el.style.display = visible ? 'block' : 'none';
-    }
-
-    // Attempt to request location (can be triggered by button or programmatically)
-    function requestLocationOnce() {
-      return new Promise((resolve) => {
-        if (!navigator.geolocation) {
-          showMsg('Geolocation not available in this WebView.');
-          resolve(null);
-          return;
-        }
-
-        navigator.geolocation.getCurrentPosition(
-          (position) => {
-            resolve({ lat: position.coords.latitude, lng: position.coords.longitude });
-          },
-          (err) => {
-            console.error('getCurrentPosition error', err);
-            if (err && err.code === 1) {
-              showMsg('Location permission denied. Allow location in app settings.');
-            } else if (err && err.code === 2) {
-              showMsg('Position unavailable.');
-            } else if (err && err.code === 3) {
-              showMsg('Location request timed out.');
-            } else {
-              showMsg('Unable to get location.');
-            }
-            resolve(null);
-          },
-          { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-        );
-      });
-    }
-
     // Initialize map
     async function initMap() {
       let lat, lng;
@@ -143,15 +79,21 @@
           lng = -122.4194;
         }
       } else if (navigator.geolocation) {
-        // Try to load user location if available (may be blocked in some WebViews)
-        const pos = await requestLocationOnce();
-        if (pos) {
-          lat = pos.lat;
-          lng = pos.lng;
-        } else {
-          lat = 37.7749;
-          lng = -122.4194;
-        }
+        // Load user location if available
+        await new Promise((resolve) => {
+          navigator.geolocation.getCurrentPosition(
+            (position) => {
+              lat = position.coords.latitude;
+              lng = position.coords.longitude;
+              resolve();
+            },
+            () => {
+              lat = 37.7749;
+              lng = -122.4194;
+              resolve();
+            }
+          );
+        });
       } else {
         lat = 37.7749;
         lng = -122.4194;
@@ -187,55 +129,7 @@
           });
         }
       });
-
-      // Hide message after a short delay
-      setTimeout(() => showMsg('', false), 5000);
     }
-
-    // Wire up the Use my location button
-    document.getElementById('loc-btn').addEventListener('click', async () => {
-      showMsg('Requesting location...');
-      // First, try browser geolocation
-      const pos = await requestLocationOnce();
-      if (pos) {
-        map.setView([pos.lat, pos.lng], 15);
-        marker.setLatLng([pos.lat, pos.lng]);
-        const addr = await reverseGeocode(pos.lat, pos.lng);
-        marker.bindPopup(addr).openPopup();
-
-        const newUrl = `${window.location.pathname}?lat=${pos.lat}&lng=${pos.lng}&address=${encodeURIComponent(addr)}`;
-        window.history.replaceState(null, '', newUrl);
-
-        if (window.flutter_inappwebview) {
-          window.flutter_inappwebview.callHandler('onLocationSelected', { lat: pos.lat, lng: pos.lng, address: addr });
-        }
-        showMsg('Location updated.', true);
-        setTimeout(() => showMsg('', false), 3000);
-        return;
-      }
-
-      // If geolocation failed, try asking the host app (Flutter) to provide location
-      if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
-        try {
-          const hostResp = await window.flutter_inappwebview.callHandler('requestLocationFromHost');
-          if (hostResp && hostResp.lat && hostResp.lng) {
-            map.setView([hostResp.lat, hostResp.lng], 15);
-            marker.setLatLng([hostResp.lat, hostResp.lng]);
-            const addr = hostResp.address || await reverseGeocode(hostResp.lat, hostResp.lng);
-            marker.bindPopup(addr).openPopup();
-            const newUrl = `${window.location.pathname}?lat=${hostResp.lat}&lng=${hostResp.lng}&address=${encodeURIComponent(addr)}`;
-            window.history.replaceState(null, '', newUrl);
-            showMsg('Location received from host app.', true);
-            setTimeout(() => showMsg('', false), 3000);
-            return;
-          }
-        } catch (e) {
-          console.warn('Host location request failed', e);
-        }
-      }
-
-      showMsg('Could not obtain location. Check app permissions and WebView settings.');
-    });
 
     initMap();
   </script>
