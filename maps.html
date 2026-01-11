@@ -59,12 +59,13 @@
     const latParam = parseFloat(queryParams.lat);
     const lngParam = parseFloat(queryParams.lng);
     const addressParam = queryParams.address || "";
+    const sParam = queryParams.s || queryParams.q || queryParams.search || "";
 
     // Reverse geocode lat/lng → address
     async function reverseGeocode(lat, lng) {
       try {
         const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`;
-        const response = await fetch(url, { headers: { 'User-Agent': 'flutter-app' } });
+        const response = await fetchJson(url);
         const data = await response.json();
         return data.display_name || "No address found";
       } catch(e) {
@@ -77,7 +78,7 @@
     async function geocodeAddress(address) {
       try {
         const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}`;
-        const response = await fetch(url, { headers: { 'User-Agent': 'flutter-app' } });
+        const response = await fetchJson(url);
         const data = await response.json();
         if (data && data.length > 0) {
           return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
@@ -86,6 +87,22 @@
         console.error(e);
       }
       return null;
+    }
+
+    // Fetch helper: try direct fetch, then fall back to a CORS proxy if blocked.
+    async function fetchJson(url) {
+      try {
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error('Network response not ok');
+        return resp;
+      } catch (err) {
+        console.warn('Direct fetch failed, trying CORS proxy:', err);
+        // Use a permissive public proxy for quick testing. For production, use a server-side proxy or CORS-enabled geocoding API.
+        const proxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+        const r2 = await fetch(proxy);
+        if (!r2.ok) throw new Error('Proxy fetch failed');
+        return r2;
+      }
     }
 
     // Show status messages to user
@@ -133,6 +150,20 @@
       if (!isNaN(latParam) && !isNaN(lngParam)) {
         lat = latParam;
         lng = lngParam;
+      } else if (sParam) {
+        // Support ?s=search queries (e.g. ?s=karachi view)
+        console.log('Searching for:', sParam);
+        const coords = await geocodeAddress(sParam);
+        if (coords) {
+          lat = coords.lat;
+          lng = coords.lng;
+          // update URL to include resolved coords
+          const newUrlS = `${window.location.pathname}?lat=${lat}&lng=${lng}&address=${encodeURIComponent(sParam)}`;
+          window.history.replaceState(null, '', newUrlS);
+        } else {
+          lat = 37.7749;
+          lng = -122.4194;
+        }
       } else if (addressParam) {
         const coords = await geocodeAddress(addressParam);
         if (coords) {
@@ -162,7 +193,7 @@
         attribution: '&copy; OpenStreetMap contributors'
       }).addTo(map);
 
-      const initialAddress = addressParam || await reverseGeocode(lat, lng);
+      const initialAddress = addressParam || sParam || await reverseGeocode(lat, lng);
       marker = L.marker([lat, lng], { draggable: true }).addTo(map);
       marker.bindPopup(initialAddress).openPopup();
 
