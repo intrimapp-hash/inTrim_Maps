@@ -122,15 +122,31 @@
 
         console.log("Updated URL:", newUrl);
 
-        // Optional: send data to Flutter if JS handler exists
-        if (window.flutter_inappwebview) {
-          window.flutter_inappwebview.callHandler('onLocationSelected', {
-            lat: pos.lat,
-            lng: pos.lng,
-            address: addr
-          });
-        }
-        // (no search input to update)
+          // Send data to Flutter (FlutterFlow) if available
+          if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
+            window.flutter_inappwebview.callHandler('onLocationSelected', {
+              lat: pos.lat,
+              lng: pos.lng,
+              address: addr
+            });
+          }
+
+          // Also postMessage to parent window for other WebView integrations
+          try {
+            window.parent.postMessage({ type: 'onLocationSelected', lat: pos.lat, lng: pos.lng, address: addr }, '*');
+          } catch (e) {
+            console.warn('postMessage failed', e);
+          }
+
+          // And support webview_flutter JavaScript channel: OnLocationSelected.postMessage(...)
+          if (window.OnLocationSelected && typeof window.OnLocationSelected.postMessage === 'function') {
+            try {
+              window.OnLocationSelected.postMessage(JSON.stringify({ lat: pos.lat, lng: pos.lng, address: addr }));
+            } catch (e) {
+              console.warn('OnLocationSelected.postMessage failed', e);
+            }
+          }
+          // (no search input to update)
       });
     }
 
