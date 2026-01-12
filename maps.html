@@ -43,8 +43,8 @@
         }
 
         // Prepare lat/lng as single-quoted string formats and log
-        const latStrQuoted = "'" + String(lat) + "'";
-        const lngStrQuoted = "'" + String(lng) + "'";
+        const latStrQuoted = "" + String(lat) + "";
+        const lngStrQuoted = "" + String(lng) + "";
         console.log('saveLocationToFirestore called with', { uid, lat, lng, latStrQuoted, lngStrQuoted, address });
 
         const snap = await db.collection('Vendor_Shop_Details').where('uid', '==', uid).get();
@@ -55,7 +55,7 @@
             updates.push(d.ref.update({
               // write both fields to remain compatible with both spellings
               location_logitude: (lng !== null && lng !== undefined) ? lngStrQuoted : null,
-              location_longitude: (lng !== null && lng !== undefined) ? lngStrQuoted : null,
+              location_logitude: (lng !== null && lng !== undefined) ? lngStrQuoted : null,
               location_latitude: (lat !== null && lat !== undefined) ? latStrQuoted : null,
               location_address: address || null
             }).then(() => {
