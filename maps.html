@@ -21,30 +21,46 @@
   <script type="module">
     // Replace the config below with your Firebase project's config
     const firebaseConfig = {
-      apiKey: "YOUR_API_KEY",
-      authDomain: "YOUR_PROJECT.firebaseapp.com",
-      projectId: "YOUR_PROJECT_ID",
+      apiKey: "AIzaSyA3diSMWsvr_EMPQaV27YznXlcCPVMKKEs",
+      authDomain: "intrim-96f53.firebaseapp.com",
+      projectId: "intrim-96f53",
       // optional: storageBucket, messagingSenderId, appId
     };
 
     import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js';
-    import { getFirestore, collection, addDoc, serverTimestamp, GeoPoint } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js';
+    import { getFirestore, collection, query as fbQuery, where, getDocs, updateDoc } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js';
 
     const fbApp = initializeApp(firebaseConfig);
     const db = getFirestore(fbApp);
 
-    // Expose a helper to save location to Firestore
-    window.saveLocationToFirestore = async function(lat, lng, address) {
+    // Expose a helper to update location in Firestore filtered by uid
+    // Only updates existing documents with matching uid; does not create new documents.
+    window.saveLocationToFirestore = async function(lat, lng, address, uid) {
       try {
-        const doc = await addDoc(collection(db, 'locations'), {
-          location: new GeoPoint(lat, lng),
-          address: address || null,
-          createdAt: serverTimestamp()
-        });
-        console.log('Saved location, id=', doc.id);
-        return { success: true, id: doc.id };
+        if (!uid) {
+          console.warn('UID not provided; will not create or update documents');
+          return { success: false, error: 'no-uid' };
+        }
+        const q = fbQuery(collection(db, 'Vendor_Shop_Details'), where('uid', '==', uid));
+        const snap = await getDocs(q);
+        if (snap && snap.size > 0) {
+          const updates = [];
+          snap.forEach((d) => {
+            updates.push(updateDoc(d.ref, {
+              location_longitude: lng,
+              location_latitude: lat,
+              location_address: address || null
+            }));
+          });
+          await Promise.all(updates);
+          console.log('Updated', snap.size, 'Vendor_Shop_Details documents for uid=', uid);
+          return { success: true, updated: snap.size };
+        } else {
+          console.warn('No Vendor_Shop_Details document found for uid=', uid);
+          return { success: false, error: 'not-found' };
+        }
       } catch (err) {
-        console.error('Failed to save location to Firestore', err);
+        console.error('Failed to update Vendor_Shop_Details in Firestore', err);
         return { success: false, error: err };
       }
     };
@@ -68,6 +84,8 @@
     const latParam = parseFloat(queryParams.lat);
     const lngParam = parseFloat(queryParams.lng);
     const addressParam = queryParams.address || "";
+    // uid to filter Vendor_Shop_Details documents
+    const uidParam = queryParams.uid || queryParams.user || "";
 
     // Reverse geocode lat/lng → address
     async function reverseGeocode(lat, lng) {
@@ -183,8 +201,8 @@
           // Also save to Firestore from the webpage if helper is available
           if (typeof window.saveLocationToFirestore === 'function') {
             try {
-              const res = await window.saveLocationToFirestore(pos.lat, pos.lng, addr);
-              if (!res.success) console.warn('Firestore save failed', res.error);
+              const res = await window.saveLocationToFirestore(pos.lat, pos.lng, addr, uidParam);
+              if (!res.success) console.warn('Firestore save/update failed', res.error);
             } catch (e) {
               console.warn('saveLocationToFirestore call failed', e);
             }
