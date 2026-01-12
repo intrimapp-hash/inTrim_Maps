@@ -85,14 +85,10 @@
     const lngParam = parseFloat(queryParams.lng);
     const addressParam = queryParams.address || "";
     // uid to filter Vendor_Shop_Details documents
-    // Persist uid from query param to localStorage so it's available on later loads
-    let uidParam = queryParams.uid || queryParams.user || localStorage.getItem('vendor_uid') || "";
+    // Keep uid only in a JS variable for the page session (no localStorage)
+    let uidParam = queryParams.uid || "";
     if (queryParams.uid) {
-      try { localStorage.setItem('vendor_uid', queryParams.uid); } catch (e) {}
       uidParam = queryParams.uid;
-    } else if (queryParams.user) {
-      try { localStorage.setItem('vendor_uid', queryParams.user); } catch (e) {}
-      uidParam = queryParams.user;
     }
 
     // Reverse geocode lat/lng → address
