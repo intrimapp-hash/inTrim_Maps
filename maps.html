@@ -3,6 +3,7 @@
 <head>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Pick Location</title>
+  <link rel="icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' fill='%23007bff'/><text x='32' y='42' font-size='32' fill='white' text-anchor='middle' font-family='Arial,Helvetica,sans-serif'>M</text></svg>">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.0/dist/leaflet.css"/>
   <script src="https://unpkg.com/leaflet@1.9.0/dist/leaflet.js"></script>
   <style>
@@ -15,6 +16,54 @@
 </head>
 <body>
   <div id="map"></div>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  <script>
+    // Replace the config below with your Firebase project's config
+    const firebaseConfig = {
+      apiKey: "AIzaSyA3diSMWsvr_EMPQaV27YznXlcCPVMKKEs",
+      authDomain: "intrim-96f53.firebaseapp.com",
+      projectId: "intrim-96f53",
+      // optional: storageBucket, messagingSenderId, appId
+    };
+
+    // Initialize compat SDK
+    if (!window.firebase || !firebase.apps || firebase.apps.length === 0) {
+      firebase.initializeApp(firebaseConfig);
+    }
+    const db = firebase.firestore();
+
+    // Expose a helper to update location in Firestore filtered by uid
+    // Only updates existing documents with matching uid; does not create new documents.
+    window.saveLocationToFirestore = async function(lat, lng, address, uid) {
+      try {
+        if (!uid) {
+          console.warn('UID not provided; will not create or update documents');
+          return { success: false, error: 'no-uid' };
+        }
+        const snap = await db.collection('Vendor_Shop_Details').where('uid', '==', uid).get();
+        if (snap && !snap.empty) {
+          const updates = [];
+          snap.forEach((d) => {
+            updates.push(d.ref.update({
+              location_longitude: lng,
+              location_latitude: lat,
+              location_address: address || null
+            }));
+          });
+          await Promise.all(updates);
+          console.log('Updated', snap.size, 'Vendor_Shop_Details documents for uid=', uid);
+          return { success: true, updated: snap.size };
+        } else {
+          console.warn('No Vendor_Shop_Details document found for uid=', uid);
+          return { success: false, error: 'not-found' };
+        }
+      } catch (err) {
+        console.error('Failed to update Vendor_Shop_Details in Firestore', err);
+        return { success: false, error: err };
+      }
+    };
+  </script>
   <script>
     let map;
     let marker;
@@ -35,6 +84,8 @@
     const latParam = parseFloat(queryParams.lat);
     const lngParam = parseFloat(queryParams.lng);
     const addressParam = queryParams.address || "";
+    // uid to filter Vendor_Shop_Details documents
+    const uidParam = queryParams.uid || queryParams.user || "";
 
     // Reverse geocode lat/lng → address
     async function reverseGeocode(lat, lng) {
@@ -144,6 +195,16 @@
               window.OnLocationSelected.postMessage(JSON.stringify({ lat: pos.lat, lng: pos.lng, address: addr }));
             } catch (e) {
               console.warn('OnLocationSelected.postMessage failed', e);
+            }
+          }
+
+          // Also save to Firestore from the webpage if helper is available and uid provided
+          if (typeof window.saveLocationToFirestore === 'function' && uidParam) {
+            try {
+              const res = await window.saveLocationToFirestore(pos.lat, pos.lng, addr, uidParam);
+              if (!res.success) console.warn('Firestore save/update failed', res.error);
+            } catch (e) {
+              console.warn('saveLocationToFirestore call failed', e);
             }
           }
           // (no search input to update)
