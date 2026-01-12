@@ -43,20 +43,21 @@
         }
 
         // Prepare lat/lng as single-quoted string formats and log
-        const latStrQuoted = "" + String(lat) + "";
-        const lngStrQuoted = "" + String(lng) + "";
-        console.log('saveLocationToFirestore called with', { uid, lat, lng, latStrQuoted, lngStrQuoted, address });
+          // Prepare lat/lng as plain strings (no embedded single quotes) and log
+          const latStr = String(lat);
+          const lngStr = String(lng);
+          console.log('saveLocationToFirestore called with', { uid, lat, lng, latStr, lngStr, address });
 
         const snap = await db.collection('Vendor_Shop_Details').where('uid', '==', uid).get();
         if (snap && !snap.empty) {
           const updates = [];
           snap.forEach((d) => {
-            console.log('Updating doc', d.id, 'with', { location_latitude: latStrQuoted, location_logitude: lngStrQuoted, location_longitude: lngStrQuoted, location_address: address || null });
+            console.log('Updating doc', d.id, 'with', { location_latitude: latStr, location_logitude: lngStr, location_longitude: lngStr, location_address: address || null });
             updates.push(d.ref.update({
               // write both fields to remain compatible with both spellings
-              location_logitude: (lng !== null && lng !== undefined) ? lngStrQuoted : null,
-              location_logitude: (lng !== null && lng !== undefined) ? lngStrQuoted : null,
-              location_latitude: (lat !== null && lat !== undefined) ? latStrQuoted : null,
+              location_logitude: (lng !== null && lng !== undefined) ? lngStr : null,
+              location_longitude: (lng !== null && lng !== undefined) ? lngStr : null,
+              location_latitude: (lat !== null && lat !== undefined) ? latStr : null,
               location_address: address || null
             }).then(() => {
               console.log('Updated doc', d.id);
