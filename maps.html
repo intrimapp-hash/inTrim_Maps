@@ -15,7 +15,9 @@
 </head>
 <body>
   <div id="map"></div>
-  <script type="module">
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  <script>
     // Replace the config below with your Firebase project's config
     const firebaseConfig = {
       apiKey: "AIzaSyA3diSMWsvr_EMPQaV27YznXlcCPVMKKEs",
@@ -24,11 +26,11 @@
       // optional: storageBucket, messagingSenderId, appId
     };
 
-    import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js';
-    import { getFirestore, collection, query as fbQuery, where, getDocs, updateDoc } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js';
-
-    const fbApp = initializeApp(firebaseConfig);
-    const db = getFirestore(fbApp);
+    // Initialize compat SDK
+    if (!window.firebase || !firebase.apps || firebase.apps.length === 0) {
+      firebase.initializeApp(firebaseConfig);
+    }
+    const db = firebase.firestore();
 
     // Expose a helper to update location in Firestore filtered by uid
     // Only updates existing documents with matching uid; does not create new documents.
@@ -38,12 +40,11 @@
           console.warn('UID not provided; will not create or update documents');
           return { success: false, error: 'no-uid' };
         }
-        const q = fbQuery(collection(db, 'Vendor_Shop_Details'), where('uid', '==', uid));
-        const snap = await getDocs(q);
-        if (snap && snap.size > 0) {
+        const snap = await db.collection('Vendor_Shop_Details').where('uid', '==', uid).get();
+        if (snap && !snap.empty) {
           const updates = [];
           snap.forEach((d) => {
-            updates.push(updateDoc(d.ref, {
+            updates.push(d.ref.update({
               location_longitude: lng,
               location_latitude: lat,
               location_address: address || null
