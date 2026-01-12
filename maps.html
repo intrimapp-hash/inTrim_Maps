@@ -42,19 +42,21 @@
           return { success: false, error: 'no-uid' };
         }
 
-        // Coerce lat/lng to numbers and add logging for debugging
+        // Prepare lat/lng as both numeric and single-quoted string formats and log
         const latNum = (lat === null || lat === undefined) ? null : Number(lat);
         const lngNum = (lng === null || lng === undefined) ? null : Number(lng);
-        console.log('saveLocationToFirestore called with', { uid, lat, lng, latNum, lngNum, address });
+        const latStrQuoted = "'" + String(lat) + "'";
+        const lngStrQuoted = "'" + String(lng) + "'";
+        console.log('saveLocationToFirestore called with', { uid, lat, lng, latNum, lngNum, latStrQuoted, lngStrQuoted, address });
 
         const snap = await db.collection('Vendor_Shop_Details').where('uid', '==', uid).get();
         if (snap && !snap.empty) {
           const updates = [];
           snap.forEach((d) => {
-            console.log('Updating doc', d.id, 'with', { location_latitude: latNum, location_longitude: lngNum, location_address: address || null });
+            console.log('Updating doc', d.id, 'with', { location_latitude: latStrQuoted, location_longitude: lngStrQuoted, location_address: address || null });
             updates.push(d.ref.update({
-              location_longitude: (lngNum !== null && !Number.isNaN(lngNum)) ? lngNum : null,
-              location_latitude: (latNum !== null && !Number.isNaN(latNum)) ? latNum : null,
+              location_longitude: (lng !== null && lng !== undefined) ? lngStrQuoted : null,
+              location_latitude: (lat !== null && lat !== undefined) ? latStrQuoted : null,
               location_address: address || null
             }));
           });
