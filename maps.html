@@ -189,13 +189,15 @@
             window.flutter_inappwebview.callHandler('onLocationSelected', {
               lat: pos.lat,
               lng: pos.lng,
-              address: addr
+              address: addr,
+              lat_str: String(pos.lat),
+              lng_str: String(pos.lng)
             });
           }
 
           // Also postMessage to parent window for other WebView integrations
           try {
-            window.parent.postMessage({ type: 'onLocationSelected', lat: pos.lat, lng: pos.lng, address: addr }, '*');
+            window.parent.postMessage({ type: 'onLocationSelected', lat: pos.lat, lng: pos.lng, address: addr, lat_str: String(pos.lat), lng_str: String(pos.lng) }, '*');
           } catch (e) {
             console.warn('postMessage failed', e);
           }
@@ -203,7 +205,7 @@
           // And support webview_flutter JavaScript channel: OnLocationSelected.postMessage(...)
           if (window.OnLocationSelected && typeof window.OnLocationSelected.postMessage === 'function') {
             try {
-              window.OnLocationSelected.postMessage(JSON.stringify({ lat: pos.lat, lng: pos.lng, address: addr }));
+              window.OnLocationSelected.postMessage(JSON.stringify({ lat: pos.lat, lng: pos.lng, address: addr, lat_str: String(pos.lat), lng_str: String(pos.lng) }));
             } catch (e) {
               console.warn('OnLocationSelected.postMessage failed', e);
             }
