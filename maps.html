@@ -42,12 +42,10 @@
           return { success: false, error: 'no-uid' };
         }
 
-        // Prepare lat/lng as both numeric and single-quoted string formats and log
-        const latNum = (lat === null || lat === undefined) ? null : Number(lat);
-        const lngNum = (lng === null || lng === undefined) ? null : Number(lng);
+        // Prepare lat/lng as single-quoted string formats and log
         const latStrQuoted = "'" + String(lat) + "'";
         const lngStrQuoted = "'" + String(lng) + "'";
-        console.log('saveLocationToFirestore called with', { uid, lat, lng, latNum, lngNum, latStrQuoted, lngStrQuoted, address });
+        console.log('saveLocationToFirestore called with', { uid, lat, lng, latStrQuoted, lngStrQuoted, address });
 
         const snap = await db.collection('Vendor_Shop_Details').where('uid', '==', uid).get();
         if (snap && !snap.empty) {
@@ -58,6 +56,11 @@
               location_longitude: (lng !== null && lng !== undefined) ? lngStrQuoted : null,
               location_latitude: (lat !== null && lat !== undefined) ? latStrQuoted : null,
               location_address: address || null
+            }).then(() => {
+              console.log('Updated doc', d.id);
+            }).catch((err) => {
+              console.error('Update failed for doc', d.id, err);
+              throw err;
             }));
           });
           await Promise.all(updates);
