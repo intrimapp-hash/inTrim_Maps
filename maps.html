@@ -41,13 +41,20 @@
           console.warn('UID not provided; will not create or update documents');
           return { success: false, error: 'no-uid' };
         }
+
+        // Coerce lat/lng to numbers and add logging for debugging
+        const latNum = (lat === null || lat === undefined) ? null : Number(lat);
+        const lngNum = (lng === null || lng === undefined) ? null : Number(lng);
+        console.log('saveLocationToFirestore called with', { uid, lat, lng, latNum, lngNum, address });
+
         const snap = await db.collection('Vendor_Shop_Details').where('uid', '==', uid).get();
         if (snap && !snap.empty) {
           const updates = [];
           snap.forEach((d) => {
+            console.log('Updating doc', d.id, 'with', { location_latitude: latNum, location_longitude: lngNum, location_address: address || null });
             updates.push(d.ref.update({
-              location_longitude: lng,
-              location_latitude: lat,
+              location_longitude: (lngNum !== null && !Number.isNaN(lngNum)) ? lngNum : null,
+              location_latitude: (latNum !== null && !Number.isNaN(latNum)) ? latNum : null,
               location_address: address || null
             }));
           });
