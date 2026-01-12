@@ -16,6 +16,39 @@
 <body>
   <div id="map"></div>
   <script>
+    // Firebase Web SDK (modular) initialization and helper
+  </script>
+  <script type="module">
+    // Replace the config below with your Firebase project's config
+    const firebaseConfig = {
+      apiKey: "YOUR_API_KEY",
+      authDomain: "YOUR_PROJECT.firebaseapp.com",
+      projectId: "YOUR_PROJECT_ID",
+      // optional: storageBucket, messagingSenderId, appId
+    };
+
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js';
+    import { getFirestore, collection, addDoc, serverTimestamp, GeoPoint } from 'https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js';
+
+    const fbApp = initializeApp(firebaseConfig);
+    const db = getFirestore(fbApp);
+
+    // Expose a helper to save location to Firestore
+    window.saveLocationToFirestore = async function(lat, lng, address) {
+      try {
+        const doc = await addDoc(collection(db, 'locations'), {
+          location: new GeoPoint(lat, lng),
+          address: address || null,
+          createdAt: serverTimestamp()
+        });
+        console.log('Saved location, id=', doc.id);
+        return { success: true, id: doc.id };
+      } catch (err) {
+        console.error('Failed to save location to Firestore', err);
+        return { success: false, error: err };
+      }
+    };
+  </script>
     let map;
     let marker;
 
@@ -144,6 +177,16 @@
               window.OnLocationSelected.postMessage(JSON.stringify({ lat: pos.lat, lng: pos.lng, address: addr }));
             } catch (e) {
               console.warn('OnLocationSelected.postMessage failed', e);
+            }
+          }
+
+          // Also save to Firestore from the webpage if helper is available
+          if (typeof window.saveLocationToFirestore === 'function') {
+            try {
+              const res = await window.saveLocationToFirestore(pos.lat, pos.lng, addr);
+              if (!res.success) console.warn('Firestore save failed', res.error);
+            } catch (e) {
+              console.warn('saveLocationToFirestore call failed', e);
             }
           }
           // (no search input to update)
