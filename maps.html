@@ -51,9 +51,11 @@
         if (snap && !snap.empty) {
           const updates = [];
           snap.forEach((d) => {
-            console.log('Updating doc', d.id, 'with', { location_latitude: latStrQuoted, location_logitude: lngStrQuoted, location_address: address || null });
+            console.log('Updating doc', d.id, 'with', { location_latitude: latStrQuoted, location_logitude: lngStrQuoted, location_longitude: lngStrQuoted, location_address: address || null });
             updates.push(d.ref.update({
+              // write both fields to remain compatible with both spellings
               location_logitude: (lng !== null && lng !== undefined) ? lngStrQuoted : null,
+              location_longitude: (lng !== null && lng !== undefined) ? lngStrQuoted : null,
               location_latitude: (lat !== null && lat !== undefined) ? latStrQuoted : null,
               location_address: address || null
             }).then(() => {
