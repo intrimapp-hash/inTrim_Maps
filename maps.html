@@ -196,8 +196,8 @@
             }
           }
 
-          // Also save to Firestore from the webpage if helper is available
-          if (typeof window.saveLocationToFirestore === 'function') {
+          // Also save to Firestore from the webpage if helper is available and uid provided
+          if (typeof window.saveLocationToFirestore === 'function' && uidParam) {
             try {
               const res = await window.saveLocationToFirestore(pos.lat, pos.lng, addr, uidParam);
               if (!res.success) console.warn('Firestore save/update failed', res.error);
