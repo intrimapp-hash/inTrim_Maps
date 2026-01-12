@@ -186,11 +186,7 @@
         const addr = await reverseGeocode(pos.lat, pos.lng);
         marker.bindPopup(addr).openPopup();
 
-        // Update URL without reloading
-        const newUrl = `${window.location.pathname}?lat=${pos.lat}&lng=${pos.lng}&address=${encodeURIComponent(addr)}`;
-        window.history.replaceState(null, '', newUrl);
-
-        console.log("Updated URL:", newUrl);
+        // address bar update disabled (no history.replaceState)
 
           // Send data to Flutter (FlutterFlow) if available
           if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
